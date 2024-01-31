@@ -96,13 +96,13 @@ def read_deres(deres):
     for line in fin:
         line =[ele.strip('"') for ele in line.rstrip().split(",")]
         geneids.append(line[0])
-        padj = None
-        if line[-1] == "NA":
-            padj = np.NaN
-        else:
-            padj = float(line[-1])
-        data.append([float(ele) for ele in line[1:-1]] + [padj])
-
+        new_line = []
+        for ele in line[1:]:
+            if ele == "NA":
+                new_line.append(np.NAN)
+            else:
+                new_line.append(float(ele))
+        data.append(new_line)
     return geneids, np.asarray(data)
 
 
