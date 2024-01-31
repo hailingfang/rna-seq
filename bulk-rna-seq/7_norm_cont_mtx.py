@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-This step has been done by DESeq2, it can output normalized count data too.
+This script is dedicated to normalize the read count matrix by RPKM/FPKM and TPM.
+
+Note that, the RPKM/FPKM and TPM is meaing only within the sample. For the comparion
+accross the samples, please use Differential Expression Analysis software.
 """
 import argparse
 from biobrary.bioparse import FASTA
@@ -10,13 +13,20 @@ import re
 
 def getargs():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fasta-file", help="fasta file to get the gene length")
+    parser.add_argument("--fasta-file", \
+                        help="RNA fasta file to get the gene length", \
+                        default=None)
+    parser.add_argument("--gene-len", help="a tab seprated gene length file", \
+                        default=None)
     parser.add_argument("--out", help="filename of output")
     parser.add_argument("countmtx", help="count matrix file")
 
     args = parser.parse_args()
-    
-    return args.fasta_file, args.out, args.countmtx
+    if (not args.fasta_file) and (not args.gene_len):
+        print("At lest one of --fastq-file and --gene-len be given.")
+        exit()
+    return args.fasta_file, args.gene_len, args.out, args.countmtx
+
 
 def parse_seqinfo(info_line):
     re_tmp = re.compile(r'\[(.+?=.+?)\]')
@@ -28,24 +38,36 @@ def parse_seqinfo(info_line):
     return info
 
 
-def get_gene_len(fasta_file):
+def get_gene_len(fasta_file, gene_len_file):
     gene_len_dic = {}
-    fasta = FASTA(fasta_file)
-    for seq in fasta:
-        seqinfo = seq.seqid_append
-        seqlen = seq.seqlen
-        seqinfo = parse_seqinfo(seqinfo)
-        gene = seqinfo["gene"]
-        if gene not in gene_len_dic:
-            gene_len_dic[gene] = [seqlen]
-        else:
-            gene_len_dic[gene].append(seqlen)
+    if gene_len_file:
+        fin = open(gene_len_file, "r")
+        for line in fin:
+            line = line.rstrip().split("\t")
+            geneid, length = line[0], int(line[1])
+            if geneid not in gene_len_dic:
+                gene_len_dic[geneid] = length
+            else:
+                print(f"Warning, The the {geneid} already exists in the dictionary")
+        return gene_len_dic
     
-    tmp = {}
-    for gene in gene_len_dic:
-        tmp[gene] = int(sum(gene_len_dic[gene]) / len(gene_len_dic[gene]))
-    gene_len_dic = tmp
-    return gene_len_dic
+    else:
+        fasta = FASTA(fasta_file)
+        for seq in fasta:
+            seqinfo = seq.seqid_append
+            seqlen = seq.seqlen
+            seqinfo = parse_seqinfo(seqinfo)
+            gene = seqinfo["gene"]
+            if gene not in gene_len_dic:
+                gene_len_dic[gene] = [seqlen]
+            else:
+                gene_len_dic[gene].append(seqlen)
+
+        tmp = {}
+        for gene in gene_len_dic:
+            tmp[gene] = int(sum(gene_len_dic[gene]) / len(gene_len_dic[gene]))
+        gene_len_dic = tmp
+        return gene_len_dic
 
 
 def read_countmtx(countmtx):
@@ -61,8 +83,8 @@ def read_countmtx(countmtx):
     
     return head, genes, data
 
+
 def FPKM_norm(gene_len_dic, genes, data_mtx):
-    print(data_mtx)
     data_sum = np.sum(data_mtx, axis=0)
     data_mtx = data_mtx * 1e9
     gene_len = []
@@ -76,7 +98,6 @@ def FPKM_norm(gene_len_dic, genes, data_mtx):
 
 
 def TPM_norm(gene_len_dic, genes, data_mtx):
-    print(data_mtx)
     data_mtx = data_mtx * 1e6
     gene_len = []
     for gg in genes:
@@ -101,15 +122,8 @@ def output_data(head, genes, data_norm, out):
 
 
 def main():
-    fasta_file, out, countmtx = getargs()
-    gene_len_dic = get_gene_len(fasta_file)
-    
-    genes = list(gene_len_dic)
-    genes.sort()
-    fout_gene = open(out + "_gene_length.tsv", "w")
-    for gg in genes:
-        print("\t".join([gg, str(gene_len_dic[gg])]), file=fout_gene)
-    fout_gene.close()
+    fasta_file, gene_len_file, out, countmtx = getargs()
+    gene_len_dic = get_gene_len(fasta_file, gene_len_file)
 
     head, genes, data = read_countmtx(countmtx)
     data_norm_fpkm = FPKM_norm(gene_len_dic, genes, data)
