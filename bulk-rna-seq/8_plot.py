@@ -93,6 +93,7 @@ def read_deres(deres):
     data = []
     geneids = []
     fin = open(deres, "r")
+    fin.readline()
     for line in fin:
         line =[ele.strip('"') for ele in line.rstrip().split(",")]
         geneids.append(line[0])
