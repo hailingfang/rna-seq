@@ -10,13 +10,14 @@ import numpy as np
 def getargs():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", default="out")
+    parser.add_argument("--text_gene", action='store_true', help="wheather add text to significent genes")
     parser.add_argument("deres", help="result file from DESeq2")
     args = parser.parse_args()
 
-    return args.out, args.deres
+    return args.out, args.deres, args.text_gene
 
 
-def plot_ma(data, ax):
+def plot_ma(data, ax, geneids, text_gene=False):
     l2fc_max = 5
     data = data.T
     meanexp = data[0]
@@ -37,7 +38,9 @@ def plot_ma(data, ax):
     in_edc = []
     in_edw = []
 
-    for me, fc, pj in zip(meanexp, l2fc, padj):
+    text = []
+
+    for gg, me, fc, pj in zip(geneids, meanexp, l2fc, padj):
         if abs(fc) > l2fc_max:
             out_mean.append(me)
             if fc > 0:
@@ -57,6 +60,10 @@ def plot_ma(data, ax):
                     out_edc.append("gray")
                     out_edw.append(0)
                 else:
+                    if fc > 0:
+                        text.append([me, l2fc_max, gg])
+                    else:
+                        text.append([me, -l2fc_max, gg])
                     out_color.append("red")
                     out_alpha.append(1)
                     out_edc.append("gray")
@@ -71,6 +78,7 @@ def plot_ma(data, ax):
                 in_edw.append(.1)
             else:
                 if pj < .01 and abs(fc) > 1:
+                    text.append([me, fc, gg])
                     in_color.append("red")
                     in_alpha.append(1)
                     in_edc.append("gray")
@@ -85,8 +93,13 @@ def plot_ma(data, ax):
                 s=5, linewidths=out_edw, edgecolor=out_edc, marker="^")
     ax.scatter(in_mean, in_l2fc, color=in_color, alpha=in_alpha, \
                linewidths=in_edw, edgecolor=in_edc, marker="o", s=5)
+    for ele in text:
+        ax.text(ele[0], ele[1], ele[2])
+
     ax.set_xscale("log", base=10)
     ax.set_ylim([-5.5, 5.5])
+    ax.set_xlabel("mean expression")
+    ax.set_ylabel("log2 fold change")
 
 
 def read_deres(deres):
@@ -108,10 +121,11 @@ def read_deres(deres):
 
 
 def main():
-    out, deres = getargs()
+    out, deres, text_gene = getargs()
+    print(text_gene)
     geneids, data = read_deres(deres)
-    fig, ax = plt.subplots()
-    plot_ma(data, ax)
+    fig, ax = plt.subplots(layout="constrained")
+    plot_ma(data, ax, geneids, text_gene=text_gene)
     fig.savefig(out + "-ma.pdf")
 
 
